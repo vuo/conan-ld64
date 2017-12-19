@@ -14,7 +14,9 @@ class Ld64Conan(ConanFile):
     # https://opensource.apple.com/release/os-x-1010.html
     dyld_version = '353.2.1'
 
-    version = ld64_version
+    package_version = '2'
+    version = '%s-%s' % (ld64_version, package_version)
+
     settings = 'os', 'compiler', 'build_type', 'arch'
     url = 'https://opensource.apple.com/'
     license = 'https://opensource.apple.com/source/ld64/ld64-%s/APPLE_LICENSE.auto.html' % ld64_version
@@ -36,7 +38,7 @@ class Ld64Conan(ConanFile):
 
     def build(self):
         with tools.chdir(self.ld64_source_dir):
-            self.run('RC_SUPPORTED_ARCHS=x86_64 xcodebuild -target ld HEADER_SEARCH_PATHS="../%s/include %s/include"'
+            self.run('RC_SUPPORTED_ARCHS=x86_64 xcodebuild -target ld CLANG_X86_VECTOR_INSTRUCTIONS=no-sse4.1 HEADER_SEARCH_PATHS="../%s/include %s/include"'
                      % (self.dyld_source_dir,
                         self.llvm_dir))
 
