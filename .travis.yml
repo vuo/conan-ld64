@@ -7,7 +7,6 @@ compiler:
     - clang
 
 before_install:
-    - find / -name lto.h
     - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
              brew update
           && travis_wait brew install --force-bottle conan llvm@3.7 qbs
