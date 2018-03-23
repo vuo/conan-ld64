@@ -14,7 +14,7 @@ class Ld64Conan(ConanFile):
     # https://opensource.apple.com/release/os-x-1010.html
     dyld_version = '353.2.1'
 
-    package_version = '2'
+    package_version = '3'
     version = '%s-%s' % (ld64_version, package_version)
 
     settings = 'os', 'compiler', 'build_type', 'arch'
@@ -23,7 +23,6 @@ class Ld64Conan(ConanFile):
     description = 'Combines several object files and libraries, resolves references, and produces an ouput file'
     ld64_source_dir = 'ld64-%s' % ld64_version
     dyld_source_dir = 'dyld-%s' % dyld_version
-    llvm_dir = '/usr/local/Cellar/llvm/3.2' # @todo Make this an actual Conan dependency.
 
     def source(self):
         tools.get('https://opensource.apple.com/tarballs/ld64/ld64-%s.tar.gz' % self.ld64_version,
@@ -38,9 +37,7 @@ class Ld64Conan(ConanFile):
 
     def build(self):
         with tools.chdir(self.ld64_source_dir):
-            self.run('RC_SUPPORTED_ARCHS=x86_64 xcodebuild -target ld CLANG_X86_VECTOR_INSTRUCTIONS=no-sse4.1 HEADER_SEARCH_PATHS="../%s/include %s/include"'
-                     % (self.dyld_source_dir,
-                        self.llvm_dir))
+            self.run('RC_SUPPORTED_ARCHS=x86_64 xcodebuild -target ld CLANG_X86_VECTOR_INSTRUCTIONS=no-sse4.1 HEADER_SEARCH_PATHS="../%s/include /usr/local/Cellar/llvm@3.7/3.7.1/lib/llvm-3.7/include"' % self.dyld_source_dir)
 
     def package(self):
         self.copy('ld', src='%s/build/Release-assert' % self.ld64_source_dir, dst='bin')
