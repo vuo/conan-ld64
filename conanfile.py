@@ -35,9 +35,12 @@ class Ld64Conan(ConanFile):
                               '#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1070',
                               '#if 0')
 
+        self.run('mv %s/APPLE_LICENSE %s/%s.txt' % (self.ld64_source_dir, self.ld64_source_dir, self.name))
+
     def build(self):
         with tools.chdir(self.ld64_source_dir):
             self.run('RC_SUPPORTED_ARCHS=x86_64 xcodebuild -target ld CLANG_X86_VECTOR_INSTRUCTIONS=no-sse4.1 HEADER_SEARCH_PATHS="../%s/include /usr/local/Cellar/llvm@3.7/3.7.1/lib/llvm-3.7/include"' % self.dyld_source_dir)
 
     def package(self):
         self.copy('ld', src='%s/build/Release-assert' % self.ld64_source_dir, dst='bin')
+        self.copy('%s.txt' % self.name, src=self.ld64_source_dir, dst='license')
