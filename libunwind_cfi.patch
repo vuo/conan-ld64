@@ -1,0 +1,38 @@
+--- a/src/ld/parsers/macho_relocatable_file.cpp	2020-07-13 18:37:24.000000000 -0400
++++ b/src/ld/parsers/macho_relocatable_file.cpp	2020-07-13 18:37:48.000000000 -0400
+@@ -4355,7 +4355,7 @@ bool CFISection<A>::needsRelocating()
+ 
+ template <>
+ void CFISection<x86_64>::cfiParse(class Parser<x86_64>& parser, uint8_t* buffer,
+-									libunwind::CFI_Atom_Info<CFISection<x86_64>::OAS>::CFI_Atom_Info cfiArray[], 
++									libunwind::CFI_Atom_Info<CFISection<x86_64>::OAS> cfiArray[], 
+ 									uint32_t& count, const pint_t cuStarts[], uint32_t cuCount)
+ {
+ 	// copy __eh_frame data to buffer
+@@ -4417,7 +4417,7 @@ void CFISection<x86_64>::cfiParse(class 
+ 
+ template <>
+ void CFISection<x86>::cfiParse(class Parser<x86>& parser, uint8_t* buffer, 
+-									libunwind::CFI_Atom_Info<CFISection<x86>::OAS>::CFI_Atom_Info cfiArray[], 
++									libunwind::CFI_Atom_Info<CFISection<x86>::OAS> cfiArray[], 
+ 									uint32_t& count, const pint_t cuStarts[], uint32_t cuCount)
+ {
+ 	// create ObjectAddressSpace object for use by libunwind
+@@ -4438,7 +4438,7 @@ void CFISection<x86>::cfiParse(class Par
+ 
+ template <>
+ void CFISection<arm>::cfiParse(class Parser<arm>& parser, uint8_t* buffer, 
+-									libunwind::CFI_Atom_Info<CFISection<arm>::OAS>::CFI_Atom_Info cfiArray[], 
++									libunwind::CFI_Atom_Info<CFISection<arm>::OAS> cfiArray[], 
+ 									uint32_t& count, const pint_t cuStarts[], uint32_t cuCount)
+ {
+ 	if ( !parser.armUsesZeroCostExceptions() ) {
+@@ -4464,7 +4464,7 @@ void CFISection<arm>::cfiParse(class Par
+ 
+ template <>
+ void CFISection<arm64>::cfiParse(class Parser<arm64>& parser, uint8_t* buffer, 
+-									libunwind::CFI_Atom_Info<CFISection<arm64>::OAS>::CFI_Atom_Info cfiArray[], 
++									libunwind::CFI_Atom_Info<CFISection<arm64>::OAS> cfiArray[], 
+ 									uint32_t& count, const pint_t cuStarts[], uint32_t cuCount)
+ {
+ 	// copy __eh_frame data to buffer

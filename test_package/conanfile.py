@@ -1,10 +1,8 @@
 from conans import ConanFile
 
 class Ld64TestConan(ConanFile):
-    generators = 'qbs'
-
     def build(self):
-        self.run('/usr/local/Cellar/llvm@3.7/3.7.1/bin/clang++-3.7 -c %s/test_package.cc -o test_package.o' % self.source_folder)
+        self.run('clang++ -c %s/test_package.cc -o test_package.o' % self.source_folder)
         self.run('bin/ld -macosx_version_min 10.10 -lc test_package.o -o test_package')
 
     def imports(self):
