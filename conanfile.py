@@ -49,6 +49,11 @@ class Ld64Conan(ConanFile):
         with tools.chdir(self.ld64_source_dir):
             self.run('patch -p1 < ../libunwind_cfi.patch')
 
+            # Don't include Swift demangling since we don't use it.
+            tools.replace_in_file('src/create_configure',
+                                  'if [ -f "${DT_TOOLCHAIN_DIR}/usr/lib/libswiftDemangle.dylib" ]; then',
+                                  'if false; then')
+
         self.run('mv %s/APPLE_LICENSE %s/%s.txt' % (self.ld64_source_dir, self.ld64_source_dir, self.name))
 
     def build(self):
