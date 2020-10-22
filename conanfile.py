@@ -1,29 +1,26 @@
-from conans import ConanFile, tools
+from conans import ConanFile, CMake, tools
 
 class Ld64Conan(ConanFile):
     name = 'ld64'
 
-    # ld64 version 253.3 is from Xcode 7.0, which purports to support macOS 10.11+,
-    # and is the earliest version to support TBD files.
+    # ld64 version 274.1 is from Xcode 8.0, which purports to support macOS 10.11+,
+    # and is the earliest version to support TBD + TAPI.
     # https://en.wikipedia.org/wiki/Xcode#Xcode_7.0_-_10.x_(since_Free_On-Device_Development)
-    # https://opensource.apple.com/release/developer-tools-70.html
-    # https://b33p.net/kosada/node/4144
-    # https://b33p.net/kosada/node/17561
-    ld64_version = '253.3'
+    # https://opensource.apple.com/release/developer-tools-80.html
+    # https://b33p.net/kosada/vuo/vuo/-/issues/4144
+    # https://b33p.net/kosada/vuo/vuo/-/issues/17561
+    # https://b33p.net/kosada/vuo/vuo/-/issues/17836
+    ld64_version = '274.1'
 
-    # ld64 needs dyld as a build-time (but not a runtime) dependency.
-    # This version is from Mac OS 10.10.0.
-    # https://opensource.apple.com/release/os-x-1010.html
+    # Also from Xcode 8.0:
     dyld_version = '353.2.1'
-
-    # ld64 needs clang as a build-time (but not a runtime) dependency.
-    # clang version 700.0.72 is from Xcode 7.0.
-    # https://opensource.apple.com/release/developer-tools-70.html
-    clang_version = '700.0.72'
+    clang_version = '800.0.38'
+    tapi_version = '1.30'
 
     package_version = '0'
     version = '%s-%s' % (ld64_version, package_version)
 
+    requires = 'llvm/5.0.2-0@vuo/stable'
     settings = 'os', 'compiler', 'build_type', 'arch'
     url = 'https://opensource.apple.com/'
     license = 'https://opensource.apple.com/source/ld64/ld64-%s/APPLE_LICENSE.auto.html' % ld64_version
@@ -31,15 +28,20 @@ class Ld64Conan(ConanFile):
     ld64_source_dir = 'ld64-%s' % ld64_version
     dyld_source_dir = 'dyld-%s' % dyld_version
     clang_source_dir = 'clang-%s' % clang_version
+    tapi_source_dir = '%s/src/projects/libtapi-%s' % (clang_source_dir, tapi_version)
+    clang_build_dir = '_build_clang'
     exports_sources = '*.patch'
 
     def source(self):
         tools.get('https://opensource.apple.com/tarballs/ld64/ld64-%s.tar.gz' % self.ld64_version,
-                  sha256='76c02f6f297c251b66504e1115946bda6e1618640bc6cf03d0ad99b17bd8a5d6')
+                  sha256='6cbe886717de833789fa562ec4889ebf9136ae5f7573d17d39836d3f5755b7ab')
         tools.get('https://opensource.apple.com/tarballs/dyld/dyld-%s.tar.gz' % self.dyld_version,
                   sha256='051089e284c5a4d671b21b73866abd01d54e5ea1912cadf3a9b916890fb31540')
         tools.get('https://opensource.apple.com/tarballs/clang/clang-%s.tar.gz' % self.clang_version,
-                  sha256='9b76776eed9e0e18064581a26fabce85f5699c5e93c8f797e9c3a8fbcd5d53d8')
+                  sha256='2d4838fccb3f75537f0ed353229b6f520f9d6dbbf77244637302c20287c9e56c')
+        with tools.chdir('%s/src/projects' % self.clang_source_dir):
+            tools.get('https://opensource.apple.com/tarballs/tapi/tapi-%s.tar.gz' % self.tapi_version,
+                      sha256='be2f3732c4ba7e9d78696fe43f0b31fa4963925ee6e4e5e11cc45603a83ff9a1')
 
         # Remove the CrashReporter stuff, which isn't open source.
         tools.replace_in_file('%s/src/ld/Options.cpp' % self.ld64_source_dir,
@@ -54,12 +56,24 @@ class Ld64Conan(ConanFile):
                                   'if [ -f "${DT_TOOLCHAIN_DIR}/usr/lib/libswiftDemangle.dylib" ]; then',
                                   'if false; then')
 
+            tools.replace_in_file('ld64.xcodeproj/project.pbxproj',
+                                  '				SDKROOT = macosx.internal;',
+                                  '				SDKROOT = macosx;')
+
         self.run('mv %s/APPLE_LICENSE %s/%s.txt' % (self.ld64_source_dir, self.ld64_source_dir, self.name))
 
     def build(self):
+        tools.mkdir(self.clang_build_dir)
+        with tools.chdir(self.clang_build_dir):
+            cmake = CMake(self)
+            cmake.definitions['LLVM_INCLUDE_TESTS'] = 'OFF'
+            cmake.configure(source_dir='../%s/src' % self.clang_source_dir, build_dir='.')
+            cmake.build(target='libtapi')
+
         with tools.chdir(self.ld64_source_dir):
-            self.run('RC_SUPPORTED_ARCHS=x86_64 xcodebuild -target ld CLANG_X86_VECTOR_INSTRUCTIONS=no-sse4.1 HEADER_SEARCH_PATHS="../%s/include ../%s/src/include src/ld"' % (self.dyld_source_dir, self.clang_source_dir))
+            self.run('RC_SUPPORTED_ARCHS=x86_64 xcodebuild -target ld CLANG_X86_VECTOR_INSTRUCTIONS=no-sse4.1 HEADER_SEARCH_PATHS="../%s/include ../%s/src/include ../%s/include ../%s/projects/libtapi-%s/include src/ld"' % (self.dyld_source_dir, self.clang_source_dir, self.tapi_source_dir, self.clang_build_dir, self.tapi_version))
 
     def package(self):
         self.copy('ld', src='%s/build/Release-assert' % self.ld64_source_dir, dst='bin')
+        self.copy('libtapi.dylib', src='%s/lib' % self.clang_build_dir, dst='lib')
         self.copy('%s.txt' % self.name, src=self.ld64_source_dir, dst='license')
