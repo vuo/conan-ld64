@@ -2,8 +2,8 @@ from conans import ConanFile
 
 class Ld64TestConan(ConanFile):
     def build(self):
-        self.run('clang++ -c %s/test_package.cc -o test_package.o' % self.source_folder)
-        self.run('bin/ld -macosx_version_min 10.10 -lc test_package.o -o test_package')
+        self.run('clang++ -mmacosx-version-min=10.11 -c %s/test_package.cc -o test_package.o' % self.source_folder)
+        self.run('bin/ld -macosx_version_min 10.11 -lc test_package.o -o test_package')
 
     def imports(self):
         self.copy('*', src='bin', dst='bin')
