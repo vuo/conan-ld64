@@ -1,0 +1,453 @@
+--- include/tapi/Core/HeaderFile.h	2020-10-22 16:05:46.000000000 -0400
++++ include/tapi/Core/HeaderFile.h	2020-10-22 16:05:56.000000000 -0400
+@@ -19,6 +19,7 @@
+ #include "tapi/Defines.h"
+ #include "llvm/ADT/StringRef.h"
+ #include <string>
++#include <vector>
+ 
+ TAPI_NAMESPACE_INTERNAL_BEGIN
+ 
+--- lib/NoInits/WithColor.cpp	2020-10-23 12:33:38.000000000 -0400
++++ lib/NoInits/WithColor.cpp	2020-10-23 12:36:34.000000000 -0400
+@@ -12,8 +12,8 @@
+ 
+ using namespace llvm;
+ 
+-WithColor::WithColor(raw_ostream &OS, HighlightColor Color, bool DisableColors)
+-    : OS(OS), DisableColors(DisableColors) {
++WithColor::WithColor(raw_ostream &OS, HighlightColor Color, ColorMode Mode)
++    : OS(OS), Mode(Mode) {
+   // Detect color from terminal type unless the user passed the --color option.
+   if (colorsEnabled()) {
+     switch (Color) {
+@@ -63,7 +63,7 @@
+                               bool DisableColors) {
+   if (!Prefix.empty())
+     OS << Prefix << ": ";
+-  return WithColor(OS, HighlightColor::Error, DisableColors).get()
++  return WithColor(OS, HighlightColor::Error, DisableColors ? ColorMode::Disable : ColorMode::Enable).get()
+          << "error: ";
+ }
+ 
+@@ -71,7 +71,7 @@
+                                 bool DisableColors) {
+   if (!Prefix.empty())
+     OS << Prefix << ": ";
+-  return WithColor(OS, HighlightColor::Warning, DisableColors).get()
++  return WithColor(OS, HighlightColor::Warning, DisableColors ? ColorMode::Disable : ColorMode::Enable).get()
+          << "warning: ";
+ }
+ 
+@@ -79,19 +79,19 @@
+                              bool DisableColors) {
+   if (!Prefix.empty())
+     OS << Prefix << ": ";
+-  return WithColor(OS, HighlightColor::Note, DisableColors).get() << "note: ";
++  return WithColor(OS, HighlightColor::Note, DisableColors ? ColorMode::Disable : ColorMode::Enable).get() << "note: ";
+ }
+ 
+ raw_ostream &WithColor::remark(raw_ostream &OS, StringRef Prefix,
+                                bool DisableColors) {
+   if (!Prefix.empty())
+     OS << Prefix << ": ";
+-  return WithColor(OS, HighlightColor::Remark, DisableColors).get()
++  return WithColor(OS, HighlightColor::Remark, DisableColors ? ColorMode::Disable : ColorMode::Enable).get()
+          << "remark: ";
+ }
+ 
+ bool WithColor::colorsEnabled() {
+-  if (DisableColors)
++  if (Mode == ColorMode::Disable)
+     return false;
+   return OS.has_colors();
+ }
+--- include/tapi/Core/FileManager.h	2020-03-16 12:46:20.000000000 -0400
++++ include/tapi/Core/FileManager.h	2020-10-23 14:19:21.000000000 -0400
+@@ -54,7 +54,7 @@
+ 
+   /// \brief Check if a particular path is a directory.
+   bool isDirectory(StringRef path, bool CacheFailure = true) {
+-    return getDirectory(path, CacheFailure) != nullptr;
++    return getDirectory(path, CacheFailure).get() != nullptr;
+   }
+ 
+   /// \brief Check if a particular path is a symlink using directory_iterator.
+diff -ur include/tapi/Core/InterfaceFile.h include/tapi/Core/InterfaceFile.h
+--- include/tapi/Core/InterfaceFile.h	2020-03-16 12:46:20.000000000 -0400
++++ include/tapi/Core/InterfaceFile.h	2020-10-23 14:37:52.000000000 -0400
+@@ -207,7 +207,7 @@
+     return mapToArchitectureSet(_targets);
+   }
+ 
+-  void setInstallName(StringRef installName) { _installName = installName; }
++  void setInstallName(StringRef installName) { _installName = installName.str(); }
+   StringRef getInstallName() const { return _installName; }
+ 
+   void setCurrentVersion(PackedVersion version) { _currentVersion = version; }
+diff -ur include/tapi/Core/TextStubCommon.h include/tapi/Core/TextStubCommon.h
+--- include/tapi/Core/TextStubCommon.h	2020-03-16 12:46:20.000000000 -0400
++++ include/tapi/Core/TextStubCommon.h	2020-10-23 14:54:02.000000000 -0400
+@@ -91,8 +91,8 @@
+ };
+ 
+ using clang::InputKind;
+-template <> struct ScalarEnumerationTraits<InputKind::Language> {
+-  static void enumeration(IO &io, InputKind::Language &kind);
++template <> struct ScalarEnumerationTraits<clang::Language> {
++  static void enumeration(IO &io, clang::Language &kind);
+ };
+ 
+ } // end namespace yaml.
+diff -ur include/tapi/Core/XPISet.h include/tapi/Core/XPISet.h
+--- include/tapi/Core/XPISet.h	2020-03-16 12:46:20.000000000 -0400
++++ include/tapi/Core/XPISet.h	2020-10-23 14:12:40.000000000 -0400
+@@ -56,7 +56,7 @@
+   }
+ 
+   static unsigned getHashValue(const SymbolsMapKey &key) {
+-    return combineHashValue(hash_value(key.kind), hash_value(key.name));
++    return detail::combineHashValue(hash_value(key.kind), hash_value(key.name));
+   }
+ 
+   static bool isEqual(const SymbolsMapKey &lhs, const SymbolsMapKey &rhs) {
+diff -ur lib/Core/ArchitectureSet.cpp lib/Core/ArchitectureSet.cpp
+--- lib/Core/ArchitectureSet.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/ArchitectureSet.cpp	2020-10-23 14:11:08.000000000 -0400
+@@ -60,7 +60,7 @@
+   std::string result;
+   auto size = count();
+   for (auto arch : *this) {
+-    result.append(getArchName(arch));
++    result.append(getArchName(arch).str());
+     size -= 1;
+     if (size)
+       result.append(" ");
+diff -ur lib/Core/FileListReader.cpp lib/Core/FileListReader.cpp
+--- lib/Core/FileListReader.cpp	2020-03-04 15:50:57.000000000 -0500
++++ lib/Core/FileListReader.cpp	2020-10-23 14:17:15.000000000 -0400
+@@ -92,7 +92,7 @@
+     if (!path)
+       return path.takeError();
+ 
+-    headerList.emplace_back(HeaderInfo{*type, *path});
++    headerList.emplace_back(HeaderInfo{*type, path->str()});
+   }
+ 
+   return Error::success();
+diff -ur lib/Core/InterfaceFile.cpp lib/Core/InterfaceFile.cpp
+--- lib/Core/InterfaceFile.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/InterfaceFile.cpp	2020-10-23 14:28:01.000000000 -0400
+@@ -152,7 +152,7 @@
+                            Target rhs) { return lhs.first < rhs; });
+ 
+   if ((it != _parentUmbrellas.end()) && !(target < it->first)) {
+-    it->second = umbrella;
++    it->second = umbrella.str();
+     return;
+   }
+ 
+@@ -166,7 +166,7 @@
+                            Target rhs) { return lhs.first < rhs; });
+ 
+   if ((it != _uuids.end()) && !(target < it->first)) {
+-    it->second = uuid;
++    it->second = uuid.str();
+     return;
+   }
+ 
+@@ -188,9 +188,9 @@
+ void InterfaceFile::inlineFramework(std::shared_ptr<InterfaceFile> framework) {
+   auto addFramework = [&](std::shared_ptr<InterfaceFile> &&framework) {
+     auto it = lower_bound(
+-        _documents, framework->getInstallName(),
++        _documents, framework->getInstallName().str(),
+         [](std::shared_ptr<InterfaceFile> &lhs, const std::string &rhs) {
+-          return lhs->getInstallName() < rhs;
++          return lhs->getInstallName().str() < rhs;
+         });
+ 
+     if ((it != _documents.end()) &&
+diff -ur lib/Core/InterfaceFileManager.cpp lib/Core/InterfaceFileManager.cpp
+--- lib/Core/InterfaceFileManager.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/InterfaceFileManager.cpp	2020-10-23 14:30:44.000000000 -0400
+@@ -30,7 +30,7 @@
+ 
+ Expected<InterfaceFile *>
+ InterfaceFileManager::readFile(const std::string &path) {
+-  auto *file = _fm.getFile(path);
++  auto *file = _fm.getFile(path).get();
+   if (file == nullptr)
+     return errorCodeToError(
+         std::make_error_code(std::errc::no_such_file_or_directory));
+@@ -44,11 +44,11 @@
+   if (!interface)
+     return interface.takeError();
+ 
+-  auto it = _libraries.find(interface.get()->getInstallName());
++  auto it = _libraries.find(interface.get()->getInstallName().str());
+   if (it != _libraries.end())
+     return it->second.get();
+ 
+-  auto result = _libraries.emplace(interface.get()->getInstallName(),
++  auto result = _libraries.emplace(interface.get()->getInstallName().str(),
+                                    std::move(interface.get()));
+   return result.first->second.get();
+ }
+diff -ur lib/Core/MachODylibReader.cpp lib/Core/MachODylibReader.cpp
+--- lib/Core/MachODylibReader.cpp	2020-08-07 02:16:35.000000000 -0400
++++ lib/Core/MachODylibReader.cpp	2020-10-23 14:39:31.000000000 -0400
+@@ -127,7 +127,7 @@
+     return results.takeError();
+ 
+   auto file = std::unique_ptr<InterfaceFile>(new InterfaceFile);
+-  file->setPath(memBuffer->getBufferIdentifier());
++  file->setPath(memBuffer->getBufferIdentifier().str());
+   file->setMemoryBuffer(std::move(memBuffer));
+ 
+   for (const auto &result : *results) {
+diff -ur lib/Core/MachOReader.cpp lib/Core/MachOReader.cpp
+--- lib/Core/MachOReader.cpp	2020-08-07 02:20:00.000000000 -0400
++++ lib/Core/MachOReader.cpp	2020-10-23 14:43:28.000000000 -0400
+@@ -161,11 +161,11 @@
+ 
+   for (auto &section : object->sections()) {
+     StringRef sectionName;
+-    section.getName(sectionName);
++    sectionName = section.getName().get();
+     if (sectionName != "__objc_imageinfo" && sectionName != "__image_info")
+       continue;
+     StringRef content;
+-    section.getContents(content);
++    content = section.getContents().get();
+     if ((content.size() >= 8) && (content[0] == 0)) {
+       uint32_t flags;
+       if (object->isLittleEndian()) {
+@@ -226,7 +226,7 @@
+ 
+ static Error readUndefinedSymbols(MachOObjectFile *object, API &api) {
+   for (const auto &symbol : object->symbols()) {
+-    auto symbolFlags = symbol.getFlags();
++    auto symbolFlags = symbol.getFlags().get();
+     if ((symbolFlags & BasicSymbolRef::SF_Global) == 0)
+       continue;
+     if ((symbolFlags & BasicSymbolRef::SF_Undefined) == 0)
+diff -ur lib/Core/Path.cpp lib/Core/Path.cpp
+--- lib/Core/Path.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/Path.cpp	2020-10-23 14:46:21.000000000 -0400
+@@ -54,7 +54,7 @@
+                const std::function<bool(StringRef)> &func) {
+   PathSeq files;
+   std::error_code ec;
+-  auto &fs = *fm.getVirtualFileSystem();
++  auto &fs = fm.getVirtualFileSystem();
+   for (llvm::vfs::recursive_directory_iterator i(fs, path, ec), ie; i != ie;
+        i.increment(ec)) {
+     if (ec)
+diff -ur lib/Core/Platform.cpp lib/Core/Platform.cpp
+--- lib/Core/Platform.cpp	2020-08-07 01:59:55.000000000 -0400
++++ lib/Core/Platform.cpp	2020-10-23 14:47:24.000000000 -0400
+@@ -160,7 +160,7 @@
+   for (auto platform : platforms) {
+     if (index > 0)
+       diagString.append(", ");
+-    diagString.append(getPlatformName(platform));
++    diagString.append(getPlatformName(platform).str());
+     ++index;
+   }
+   diagString.append(" ]");
+diff -ur lib/Core/Registry.cpp lib/Core/Registry.cpp
+--- lib/Core/Registry.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/Registry.cpp	2020-10-23 14:52:33.000000000 -0400
+@@ -150,7 +150,7 @@
+ }
+ 
+ void Registry::addYAMLReaders() {
+-  auto reader = make_unique<YAMLReader>();
++  auto reader = std::make_unique<YAMLReader>();
+   reader->add(
+       std::unique_ptr<DocumentHandler>(new stub::v1::YAMLDocumentHandler));
+   reader->add(
+@@ -163,7 +163,7 @@
+ }
+ 
+ void Registry::addYAMLWriters() {
+-  auto writer = make_unique<YAMLWriter>();
++  auto writer = std::make_unique<YAMLWriter>();
+   writer->add(
+       std::unique_ptr<DocumentHandler>(new stub::v1::YAMLDocumentHandler));
+   writer->add(
+@@ -176,7 +176,7 @@
+ }
+ 
+ void Registry::addDiagnosticReader() {
+-  add(make_unique<DiagnosticReader>());
++  add(std::make_unique<DiagnosticReader>());
+ }
+ 
+ TAPI_NAMESPACE_INTERNAL_END
+diff -ur lib/Core/TextStubCommon.cpp lib/Core/TextStubCommon.cpp
+--- lib/Core/TextStubCommon.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/TextStubCommon.cpp	2020-10-23 14:58:32.000000000 -0400
+@@ -190,7 +190,7 @@
+     return "invalid uuid string pair";
+ 
+   value.first = Target{getArchType(arch), Platform::unknown};
+-  value.second = uuid;
++  value.second = uuid.str();
+   return {};
+ }
+ QuotingType ScalarTraits<UUID>::mustQuote(StringRef) {
+@@ -198,16 +198,16 @@
+ }
+ 
+ using clang::InputKind;
+-void ScalarEnumerationTraits<InputKind::Language>::enumeration(
+-    IO &io, InputKind::Language &kind) {
+-  io.enumCase(kind, "c", InputKind::C);
+-  io.enumCase(kind, "cxx", InputKind::CXX);
+-  io.enumCase(kind, "objective-c", InputKind::ObjC);
+-  io.enumCase(kind, "objc", InputKind::ObjC); // to keep old snapshots working.
+-  io.enumCase(kind, "objective-cxx", InputKind::ObjCXX);
++void ScalarEnumerationTraits<clang::Language>::enumeration(
++    IO &io, clang::Language &kind) {
++  io.enumCase(kind, "c", clang::Language::C);
++  io.enumCase(kind, "cxx", clang::Language::CXX);
++  io.enumCase(kind, "objective-c", clang::Language::ObjC);
++  io.enumCase(kind, "objc", clang::Language::ObjC); // to keep old snapshots working.
++  io.enumCase(kind, "objective-cxx", clang::Language::ObjCXX);
+   io.enumCase(kind, "objcxx",
+-              InputKind::ObjCXX); // to keep old snapshots working.
+-  io.enumCase(kind, "unknown", InputKind::Unknown);
++              clang::Language::ObjCXX); // to keep old snapshots working.
++  io.enumCase(kind, "unknown", clang::Language::Unknown);
+ }
+ 
+ } // end namespace yaml.
+diff -ur lib/Core/Utils.cpp lib/Core/Utils.cpp
+--- lib/Core/Utils.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/Utils.cpp	2020-10-23 15:00:17.000000000 -0400
+@@ -88,10 +88,10 @@
+       SmallString<PATH_MAX> tbdPath = fullPath;
+       TAPI_INTERNAL::replace_extension(tbdPath, ".tbd");
+       if (fm.exists(tbdPath))
+-        return tbdPath.str();
++        return tbdPath.str().str();
+ 
+       if (fm.exists(fullPath))
+-        return fullPath.str();
++        return fullPath.str().str();
+     }
+   } else {
+     // Copy ld64's behavior: If this is a .dylib inside a framework, do not
+@@ -107,10 +107,10 @@
+         TAPI_INTERNAL::replace_extension(tbdPath, ".tbd");
+ 
+         if (fm.exists(tbdPath))
+-          return tbdPath.str();
++          return tbdPath.str().str();
+ 
+         if (fm.exists(fullPath))
+-          return fullPath.str();
++          return fullPath.str().str();
+       }
+     }
+   }
+@@ -123,10 +123,10 @@
+     TAPI_INTERNAL::replace_extension(tbdPath, ".tbd");
+ 
+     if (fm.exists(tbdPath))
+-      return tbdPath.str();
++      return tbdPath.str().str();
+ 
+     if (fm.exists(fullPath))
+-      return fullPath.str();
++      return fullPath.str().str();
+   }
+ 
+   return std::string();
+diff -ur lib/Core/XPI.cpp lib/Core/XPI.cpp
+--- lib/Core/XPI.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/XPI.cpp	2020-10-23 15:01:33.000000000 -0400
+@@ -40,7 +40,7 @@
+ 
+ std::string XPI::getPrettyName(bool demangle) const {
+   if (!demangle)
+-    return _name;
++    return _name.str();
+ 
+   if (demangle && _name.startswith("__Z")) {
+     int status = 0;
+@@ -54,9 +54,9 @@
+   }
+ 
+   if (_name[0] == '_')
+-    return _name.substr(1);
++    return _name.substr(1).str();
+ 
+-  return _name;
++  return _name.str();
+ }
+ 
+ std::string XPI::getAnnotatedName(bool demangle) const {
+diff -ur lib/Core/YAMLReaderWriter.cpp lib/Core/YAMLReaderWriter.cpp
+--- lib/Core/YAMLReaderWriter.cpp	2020-03-16 12:46:20.000000000 -0400
++++ lib/Core/YAMLReaderWriter.cpp	2020-10-23 15:02:21.000000000 -0400
+@@ -61,7 +61,7 @@
+                        diag.getRanges(), diag.getFixIts());
+ 
+   newdiag.print(nullptr, s);
+-  file->errorMessage = message.str();
++  file->errorMessage = message.str().str();
+ }
+ 
+ bool YAMLBase::canRead(MemoryBufferRef memBufferRef, FileType types) const {
+@@ -113,7 +113,7 @@
+                      ReadFlags readFlags, ArchitectureSet arches) const {
+   // Create YAML Input Reader.
+   YAMLContext ctx(*this);
+-  ctx.path = memBuffer->getBufferIdentifier();
++  ctx.path = memBuffer->getBufferIdentifier().str();
+   ctx.readFlags = readFlags;
+   llvm::yaml::Input yin(memBuffer->getBuffer(), &ctx, DiagHandler, &ctx);
+ 
+diff -ur tools/libtapi/LinkerInterfaceFile.cpp tools/libtapi/LinkerInterfaceFile.cpp
+--- tools/libtapi/LinkerInterfaceFile.cpp	2020-03-16 12:46:20.000000000 -0400
++++ tools/libtapi/LinkerInterfaceFile.cpp	2020-10-23 15:03:31.000000000 -0400
+@@ -140,7 +140,7 @@
+     }
+ 
+     if (action == "install_name") {
+-      _installName = symbolName;
++      _installName = symbolName.str();
+       _installPathOverride = true;
+       if (_installName == "/System/Library/Frameworks/"
+                           "ApplicationServices.framework/Versions/A/"
+@@ -316,9 +316,6 @@
+     case MachO::PLATFORM_BRIDGEOS:
+       platform = Platform::bridgeOS;
+       break;
+-    case MachO::PLATFORM_DRIVERKIT:
+-      platform = Platform::DriverKit;
+-      break;
+     }
+   }
+ 
+@@ -347,8 +344,6 @@
+     return MachO::PLATFORM_TVOSSIMULATOR;
+   case tapi::internal::Platform::bridgeOS:
+     return MachO::PLATFORM_BRIDGEOS;
+-  case tapi::internal::Platform::DriverKit:
+-    return MachO::PLATFORM_DRIVERKIT;
+   }
+ }
+ #pragma clang diagnostic pop
+@@ -387,7 +382,7 @@
+     _platforms.emplace_back(value);
+   }
+   llvm::sort(_platforms);
+-  _installName = interface->getInstallName();
++  _installName = interface->getInstallName().str();
+   _currentVersion = interface->getCurrentVersion();
+   _compatibilityVersion = interface->getCompatibilityVersion();
+   _hasTwoLevelNamespace = interface->isTwoLevelNamespace();
