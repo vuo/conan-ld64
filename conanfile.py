@@ -12,9 +12,6 @@ class Ld64Conan(ConanFile):
     # https://b33p.net/kosada/vuo/vuo/-/issues/17836
     ld64_version = '530'
 
-    # From Xcode 11.3.1.
-    cctools_version = '949.0.1'
-
     # dyld version 750.6 is from macOS 10.15.6.
     # https://opensource.apple.com/release/macos-10156.html
     dyld_version = '750.6'
@@ -29,14 +26,13 @@ class Ld64Conan(ConanFile):
     package_version = '2'
     version = '%s-%s' % (ld64_version, package_version)
 
-    requires = 'llvm/5.0.2-0@vuo/stable'
-    build_requires = 'macos-sdk/10.11-0@vuo/stable'
+    requires = 'llvm/5.0.2-1@vuo/stable'
+    build_requires = 'macos-sdk/11-0@vuo/stable'
     settings = 'os', 'compiler', 'build_type', 'arch'
     url = 'https://opensource.apple.com/'
     license = 'https://opensource.apple.com/source/ld64/ld64-%s/APPLE_LICENSE.auto.html' % ld64_version
     description = 'Combines several object files and libraries, resolves references, and produces an ouput file'
     ld64_source_dir = 'ld64-%s' % ld64_version
-    cctools_source_dir = 'cctools-%s' % cctools_version
     dyld_source_dir = 'dyld-%s' % dyld_version
     llvm_source_dir = 'llvm-%s.src' % llvm_version
     tapi_source_dir = '%s/projects/tapi-%s' % (llvm_source_dir, tapi_version)
@@ -46,8 +42,6 @@ class Ld64Conan(ConanFile):
     def source(self):
         tools.get('https://opensource.apple.com/tarballs/ld64/ld64-%s.tar.gz' % self.ld64_version,
                   sha256='ee37f0487601c08c7d133bc91cad2e9084d00d02aa4709d228a9a065960aa187')
-        tools.get('https://opensource.apple.com/tarballs/cctools/cctools-%s.tar.gz' % self.cctools_version,
-                  sha256='830485ac7c563cd55331f643952caab2f0690dfbd01e92eb432c45098b28a5d0')
         tools.get('https://opensource.apple.com/tarballs/dyld/dyld-%s.tar.gz' % self.dyld_version,
                   sha256='4fd378cf30718e0746c91b145b90ddfcaaa4c0bf01158d0461a4e092d7219222')
 
@@ -102,15 +96,7 @@ class Ld64Conan(ConanFile):
                                   '"%s/../%s/lib/libtapi.dylib",' % (os.getcwd(), self.llvm_build_dir))
             self.run('RC_SUPPORTED_ARCHS="x86_64 arm64" xcodebuild -target ld HEADER_SEARCH_PATHS="../%s/include ../%s/include ../%s/include ../%s/projects/tapi-%s/include src/ld"' % (self.dyld_source_dir, self.llvm_source_dir, self.tapi_source_dir, self.llvm_build_dir, self.tapi_version))
 
-        with tools.chdir(self.cctools_source_dir):
-            with tools.chdir('libstuff'):
-                self.run('SDK="-I../../../%s/include" make' % self.llvm_source_dir)
-            with tools.chdir('misc'):
-                self.run('make lipo.NEW')
-                self.run('mv lipo.NEW lipo')
-
     def package(self):
         self.copy('ld', src='%s/build/Release-assert' % self.ld64_source_dir, dst='bin')
-        self.copy('lipo', src='%s/misc' % self.cctools_source_dir, dst='bin')
         self.copy('libtapi.dylib', src='%s/lib' % self.llvm_build_dir, dst='lib')
         self.copy('%s.txt' % self.name, src=self.ld64_source_dir, dst='license')
