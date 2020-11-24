@@ -23,10 +23,10 @@ class Ld64Conan(ConanFile):
     # This is the earliest version that supports tapi-1100.0.11.
     llvm_version = '11.0.0'
 
-    package_version = '3'
+    package_version = '4'
     version = '%s-%s' % (ld64_version, package_version)
 
-    requires = 'llvm/5.0.2-1@vuo/stable'
+    requires = 'llvm/5.0.2-2@vuo/stable'
     build_requires = 'macos-sdk/11.0-0@vuo/stable'
     settings = 'os', 'compiler', 'build_type', 'arch'
     url = 'https://opensource.apple.com/'
@@ -132,6 +132,7 @@ class Ld64Conan(ConanFile):
             tools.mkdir('lib')
             with tools.chdir('lib'):
                 self.run('lipo -create ../../%s/lib/libtapi.dylib ../../%s/lib/libtapi.dylib -output libtapi.dylib' % (self.build_llvm_x86_dir, self.build_llvm_arm_dir))
+                self.run('codesign --sign - libtapi.dylib')
 
 
         self.output.info("=== Build ld for both x86_64 + arm64 ===")
