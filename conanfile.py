@@ -23,10 +23,10 @@ class Ld64Conan(ConanFile):
     # This is the earliest version that supports tapi-1100.0.11.
     llvm_version = '11.0.0'
 
-    package_version = '4'
+    package_version = '5'
     version = '%s-%s' % (ld64_version, package_version)
 
-    requires = 'llvm/5.0.2-2@vuo/stable'
+    requires = 'llvm/5.0.2-3@vuo/stable'
     build_requires = 'macos-sdk/11.0-0@vuo/stable'
     settings = 'os', 'compiler', 'build_type', 'arch'
     url = 'https://opensource.apple.com/'
